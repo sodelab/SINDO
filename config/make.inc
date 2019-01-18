@@ -1,6 +1,4 @@
- SINDO_ROOT = $SINDO_ROOT
- #SINDO_ROOT = $SINDO_ROOT
- SINDO_ROOT = /Users/osode/Desktop/dimer-manuscript-files/step/../tools/sindo
+ SINDO_ROOT = /container/dimer-vib/tools/sindo
  TARGET = 
 
  SINDO_BINDIR = ${SINDO_ROOT}/bin/
