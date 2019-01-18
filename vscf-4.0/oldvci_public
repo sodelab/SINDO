@@ -1,0 +1,1042 @@
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!   Last modified  2007/12/09
+!   Code description by K.Yagi
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!
+!
+      Subroutine Vci_Construct(ierr)
+
+      USE Vci_mod
+
+      Implicit None
+
+         Integer :: ierr
+         Integer :: i,j,k,l,in,iout,spr_memalloc
+         Integer :: maxEx(100),maxExAll
+
+         Integer, parameter :: nmax=10000,m=60
+         Integer, dimension(m*nmax):: state
+         Integer, dimension(m,nmax):: state_label
+
+         Namelist /vci/Nstate,nCI,maxEx,maxExAll,maxSum,nCUP, &
+                       nLvl,nGen,pth0,pth1,pth2,dump,ss,state,state_label
+
+      ! ----------------------------------------------------------------
+
+         ierr=0
+         Call spr_Getio(in,iout)
+
+         ! ------------------------------------------------------------
+         ! >> Read input 
+
+         ! --- default ---
+
+         ! - VCI space selection 
+         !
+         ! > One-to-All CI
+         Nstate=-1
+         nCI=0
+         maxEx=-1
+         maxExAll=-1
+         maxSum=-1
+         nCUP=4
+
+         ! > State-specific CI
+         nLvl=0
+         nGen=3
+         pth0=500
+         pth1=1.D-01
+         pth2=0.9D+00
+         ss=.false.
+
+         Rewind(in)
+         Read(in,vci,end=10)
+      10 Continue
+
+         write(iout,100)
+     100 Format(//,'(  ENTER VCI MODULE  )',//, &
+                3x,'>> VCI OPTIONS',/)
+
+         if(nLvl==0) then
+
+            write(iout,105)
+
+            write(iout,110) Nstate
+            Nst=Nstate
+
+            write(iout,120)
+
+            if(nCUP < 1 .or. nCUP > Nfree) nCUP=Nfree
+            write(iout,130) nCUP
+
+            if(maxSum>0) then 
+               write(iout,131) maxSum
+              !write(666,131) maxSum!MK
+            else
+               write(iout,132) 
+            endif
+
+            ierr=spr_memalloc(1,dble(Nfree)*4.D+00)
+            if(ierr<0) return
+            Allocate(maxExc(Nfree))
+            Do i=1,Nfree
+               if(maxEx(i)/=-1) then 
+                  maxExc(i)=maxEx(i)+1
+               elseif(maxExAll/=-1) then
+                  maxExc(i)=maxExAll+1
+               else
+                  maxExc(i)=nCHO(i)
+               endif
+               if(maxExc(i)>nCHO(i)) maxExc(i)=nCHO(i)
+               if(maxSum>0 .and. maxExc(i)>maxSum+1) maxExc(i)=maxSum+1
+            End do
+            if(Nfree<4) then 
+               write(iout,121) (maxExc(i)-1,i=1,Nfree)
+            else
+               write(iout,121) (maxExc(i)-1,i=1,3)
+               write(iout,122) (maxExc(i)-1,i=4,Nfree)
+            endif
+
+            if(maxSum>0) then
+               k=maxVal(maxExc)-1
+               j=1; l=1
+               Do i=1,nCUP
+                  l=l*(Nfree+1-i)/i*(maxSum+1-i)/i
+                  j=j+l
+               End do
+
+            else
+               maxSum=0
+               Do i=1,Nfree
+                  if(maxExc(i)>0) maxSum=maxSum + maxExc(i)-1
+               End do
+               !maxSum=maxSum-Nfree
+
+               k=maxVal(maxExc)-1
+               j=1; l=1
+               Do i=1,nCUP
+                  l=l*(Nfree+1-i)/i*k
+                  j=j+l
+               End do
+            endif
+            if(nCI>j .or. nCI==0) nCI=j
+
+            write(iout,133) nCI
+            write(iout,*)
+
+     105 Format(5x,'[  ONE-TO-ALL CI  ]',/)
+     110 Format(7x,'o NUM_OF_STATES  : ',i10)
+     120 Format(7x,'o CI SPACE')
+     121 Format(9x,'- MAX Q        :  ',3i3)
+     122 Format(9x,'                  ',3i3)
+     130 Format(9x,'- MODE COUPLING:    ',i7)
+     131 Format(9x,'- MAX SUM_OF_Q :    ',i7)
+     132 Format(9x,'- MAX SUM_OF_Q :  UNLIMITED')
+     133 Format(9x,'- MAX N_CONFIG.:    ',i7)
+
+         else
+
+            if(ss) then 
+               write(iout,145)
+            else
+               write(iout,146)
+               Call Vcor_setTarget(state,state_label(1:Nfree,1:Nstate))
+
+               if(Nfree<=30) then
+                  Do j=1,Nstate
+                     write(iout,115) j,(label0(k+(j-1)*Nfree),k=1,Nfree)
+                  End do
+               else
+                  Do j=1,Nstate
+                     write(iout,115) j,(label0(k+(j-1)*Nfree),k=1,30)
+                     write(iout,116) (label0(k+(j-1)*Nfree),k=31,Nfree)
+                  End do
+               endif
+               write(iout,*)
+
+            endif
+     115    Format(7x,'TARGET STATE ',i3.3,':',3x,6(5i1,1x))
+     116    Format(27x,6(5i1,1x))
+
+            if(.not. lvscf) then
+                Write(iout,*)
+                Write(iout,'(8x,''ERROR:  STATE-SPECIFIC CI REQUIRES VSCF REFERENCES '')')
+                Write(iout,'(8x,''ERROR:  RE-RUN WITH VSCF=.TRUE. '')')
+                Write(iout,*)
+                Stop
+            endif
+
+            write(iout,150) nLvl
+            write(iout,154) nGen
+            write(iout,155) pth0
+            write(iout,156) pth1
+            write(iout,157) pth2
+            write(iout,*)
+
+     145 Format(5x,'[  STATE-SPECIFIC CI  ]',/)
+     146 Format(5x,'[  STATE-SPECIFIC CI WITH ZERO-POINT VSCF REFERENCE  ]',/)
+     150 Format(7x,'o LEVEL    : ',i10)
+     154 Format(7x,'o N_GEN    : ',i10)
+     155 Format(7x,'o PTH0     : ',f10.1,' [CM-1]')
+     156 Format(7x,'o PTH1     : ',f10.4)
+     157 Format(7x,'o PTH2     : ',f10.4)
+
+         endif
+
+         ! ------------------------------------------------------------
+
+         if(lvscf) then
+            Write(iout,170)
+            Call file_indicator(10,rwf)
+            Open(rwf,file='vscf-w.wfn',form='UNFORMATTED')
+         endif
+
+     170 Format(7x,'o READ VSCF WFN  : vscf-w.wfn')
+
+         ! ------------------------------------------------------------
+
+         if(dump) write(iout,180)
+     180 Format(7x,'o DUMP VCI WFN   : vci-w.wfn')
+
+         ! ------------------------------------------------------------
+
+         write(iout,200)
+         Call spr_meminfo
+         Call timer(1)
+     200 Format(//,'(  SETUP OF VCI COMPLETED  )',//)
+
+      End subroutine
+
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+
+      Subroutine Vci_finalz()
+
+      USE Vci_mod
+
+      Implicit None
+
+         if(lvscf) Close(rwf)
+
+         if(allocated(maxExc)) then
+            Call spr_memdealloc(dble(Nfree)*4.D+00)
+            Deallocate(maxExc)
+         endif
+
+      End subroutine
+
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!
+
+      Subroutine Vci_main()
+
+      USE Vci_mod
+
+      Implicit None
+
+         Integer :: i,j,k,l
+         Integer :: in,io,ierr,spr_memalloc,Ist
+         Integer :: lb(Nfree)
+
+         Call spr_Getio(in,io)
+         write(io,100)
+
+         Call Vcor_Construct(ierr)
+         if(ierr<0) then
+            write(io,*) 'ERROR IN VCI_MAIN WHILE SETTING UP VCOR_MODULE'
+            Stop
+         endif
+
+         if(nLvl==0) then
+            Call setCIbasis(ierr)
+            if(ierr<0) then 
+               write(io,*) 'ERROR IN VCI_MAIN WHILE SETTING UP CI BASIS' 
+               Stop
+            endif
+            Call Vcor_setKinmat()
+            Call Vcor_setWfn()
+            Call Vcor_setQmat()
+
+            if(Nst>nCI) Nst=nCI
+            write(io,110) Nst,nCI
+            !write(666,110) Nst,nCI !MK
+            if(Nfree<31) then
+               write(io,115) ref
+            else
+               write(io,115) (ref(i),i=1,30)
+               write(io,116) (ref(i),i=31,Nfree)
+            endif
+            write(io,*)
+
+            ierr=spr_memalloc(-1,dble(nCI)*dble(Nst+1)*8.D+00)
+            Allocate(CIwfn(nCI*Nst),CIene(nCI))
+            Call Vci_boost(io)
+            Call Vci_print(io)
+            if(dump) Call Vci_Dump()
+            Call spr_memdealloc(dble(nCI)*dble(Nst+1)*8.D+00)
+            Deallocate(CIwfn,CIene)
+
+
+         else
+            write(io,120) 
+
+            Ist=1
+            Do while (.true.) 
+
+               if(ss .or. Ist==1) then 
+                  Call Vcor_rVSCF(ierr)
+                  if(ierr<0) exit
+                  if(Ist==1 .and. .not. zp) then
+                     write(io,*) 'ERROR:  THE FIRST VSCF REFERENCE MUST BE THE ZERO POINT STATE'
+                     write(io,*) 'ERROR:  RESET state IN &VSCF'
+                     Stop
+                  endif
+               else
+                  if(Ist==(Nstate+1)) exit
+                  tar=label0(Nfree*(Ist-1)+1:Nfree*Ist)
+                  zp=.false.
+               endif
+
+               Call Vcor_setKinmat()
+               Call Vcor_setWfn()
+               Call Vcor_setQmat()
+
+               if(Nfree<31) then
+                  write(io,125) Ist,tar
+               else
+                  write(io,125) Ist,(tar(i),i=1,30)
+                  write(io,126) (tar(i),i=31,Nfree)
+               endif
+               write(io,*)
+
+               Call Vcor_set_pCnf()
+
+               if(npCnf>0) then
+                  write(io,128) npCnf
+                  if(Nfree<31) then
+                     Do i=1,npCnf
+                        Call Vcor_getLabel(i+1,lb)
+                        write(io,130) i,lb
+                     End do
+                  else
+                     Do i=1,npCnf
+                        Call Vcor_getLabel(i+1,lb)
+                        write(io,130) j,(lb(j),j=1,30)
+                        write(io,131) (lb(j),j=31,Nfree)
+                     End do
+                  endif
+                  write(io,*)
+               endif
+
+               Call Vcor_set_qCnf()
+               write(io,135)
+               write(io,136) nqCnf
+               Do i=1,nqCUP
+                  write(io,137) i,nqCnfi(i)
+               End do
+
+               nCI=1+npCnf+nqCnf
+               Nst=1+npCnf+nqCnf
+
+               ierr=spr_memalloc(-1,dble(nCI)*dble(Nst+1)*8.D+00)
+               Allocate(CIwfn(nCI*Nst),CIene(nCI))
+               Call Vci_boost(io)
+               Call Vci_print2(io)
+               Call spr_memdealloc(dble(nCI)*dble(Nst+1)*8.D+00)
+               Deallocate(CIwfn,CIene)
+
+               Ist=Ist+1
+               Call Vcor_ClearCnf
+
+               Call timer(1)
+               write(io,*)
+
+            End do
+
+         endif
+
+         Call Vcor_finalz()
+
+
+         write(io,200)
+         Call spr_meminfo
+         Call timer(1)
+
+     100 Format(/'(  ENTER VCI MAIN MODULE  )',//)
+     110 Format(/,3x,'>> ONE-TO-ALL CI-BASIS SELECTION',//, &
+                9x,'o NUM_OF_STATES  : ',i6,/, &
+                9x,'o NUM_OF_CONFIG. : ',i6,/)
+     115 Format(9x,'o REFERENCE VSCF :',3x,6(5i1,1x))
+     116 Format(17x,                ':',3x,6(5i1,1x))
+     120 Format(/,3x,'[  LOOP OVER VCI STATES  ]',//)
+     125 Format(5x,'>> STATE ',i3.3,':',3x,6(5i1,1x))
+     126 Format(21x,6(5i1,1x))
+     128 Format(9x,'o RESONANT STATES   (P-SPACE) : ',i6,/)
+     130 Format(12x,'(',i2.2,'):  ',6(5i1,1x))
+     131 Format(19x,6(5i1,1x))
+     135 Format(9x,'o CORRELATED STATES (Q-SPACE)',/)
+     136 Format(12x,'=== TOTAL ===  : ',i10)
+     137 Format(19x,i2,'-MODE : ',i10)
+     200 Format(/'(  EXIT VCI MAIN MODULE  )',//)
+
+      End subroutine
+
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!
+
+      Subroutine Vci_boost(io)
+
+      USE Vci_mod
+
+      Implicit None
+
+         Integer :: i,j,k,l,io,spr_memalloc
+         Integer :: lb(Nfree),lb2(Nfree)
+         Integer :: cp,Vcor_getCUP
+         Real(8) :: Ene,Vcor_getHmat,H2wvn
+         Real(8), allocatable :: Hmat(:)
+
+         i=spr_memalloc(-1,dble(nCI*(nCI+1)/2)*8.D+00)
+         Allocate(Hmat(nCI*(nCI+1)/2))
+
+         ! Generate Hamiltonian matrix
+         if(io>0) write(io,100)
+         k=1
+         Do i=1,nCI
+            cp=Vcor_getCUP(1,i)
+            if(cp>MR) then
+               Hmat(k)=0.D+00
+            elseif(cp/=1) then
+               Hmat(k)=Vcor_getHmat(cp,1,i)
+            else
+               if(.not. ss .or. .not. lvscf) then 
+                  Hmat(k)=Vcor_getHmat(cp,1,i)
+               else
+                  Hmat(k)=0.D+00
+               endif
+            endif
+            k=k+1
+
+            Do j=2,i
+               cp=Vcor_getCUP(j,i)
+               if(cp>MR) then
+                  Hmat(k)=0.D+00
+               else
+                  Hmat(k)=Vcor_getHmat(cp,j,i)
+               endif
+               k=k+1
+            End do
+         End do
+         if(io>0) write(io,200)
+
+         if(io>0) write(io,110)
+!
+! vci matrix output //shiozaki
+!>>>
+ !        open(40,file='hmat',form='unformatted')
+ !        write(40) Hmat
+ !        stop
+!<<<
+!
+         Call diag(nCI,Nst,Hmat,CIwfn,CIene)
+         if(io>0) write(io,200)
+
+         Call spr_memdealloc(dble(nCI*(nCI+1)/2)*8.D+00)
+         Deallocate(Hmat)
+
+     100 Format(/,9x,'o FORMING HAMILTONIAN MATRIX')
+     110 Format(/,9x,'o DIAGONALIZING HAMILTONIAN MATRIX')
+     200 Format(9x,'  ... DONE')
+
+         !dbg Ene=Vcor_getHmat(0,1,1)
+         !dbg write(6,'(f12.4)') Ene*H2wvn()
+         !dbg Do i=2,nCI
+         !dbg    cp=Vcor_getCUP(1,i)
+         !dbg    if(cp<=3) then
+         !dbg       Call Vcor_getLabel(1,lb)
+         !dbg       Call Vcor_getLabel(i,lb2)
+         !dbg       Ene=Vcor_getHmat(cp,1,i)
+         !dbg       write(6,'(i2,2x,4i3,2x,4i3,f12.4)') cp,lb,lb2,Ene*H2wvn()
+         !dbg    endif
+         !dbg End do
+
+         !dbg Do i=1,nCI
+         !dbg   Call Vcor_getLabel(i,lb)
+         !dbg   Do j=1,i
+         !dbg      Call Vcor_getLabel(j,lb2)
+         !dbg      cp=Vcor_getCUP(i,j)
+         !dbg      write(6,'(2x,3i5)') i,j,cp
+         !dbg      write(6,'(3x,10i2)') lb
+         !dbg      write(6,'(3x,10i2)') lb2
+         !dbg   End do
+         !dbg End do
+
+      End subroutine
+!
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!
+!    ist :: an index for the current state
+
+     Subroutine Vci_ave(ist)
+
+     USE Vci_mod
+
+     Implicit None
+
+        Integer :: spr_GetNat,Nat,ie,spr_memalloc
+        Integer :: i,j,k,l,m,n,i1,i2,n1,n2
+
+        Integer :: ist,jst
+        Integer :: Label1(Nfree),Label2(Nfree)
+        Real(8) :: wgt,D1(maxCHO),A0
+ !       Real(8), allocatable :: 
+        Real(8), parameter :: thresh=1.D-06
+	Double Precision, allocatable :: QQ(:),quad(:,:),x0(:,:),R0(:,:)!MK
+        Nat=spr_GetNat()
+        ie=spr_memalloc(1,dble(Nfree+3*Nat+maxCHO*Nfree)*8.D+00)
+        Allocate(QQ(Nfree),quad(maxCHO,Nfree),x0(3,Nat),R0(Nat,Nat))
+
+        Do i=1,Nfree
+           Call Modal_getQ(i,nCHO(i),quad(:,i))
+        End do
+
+        jst=(ist-1)*nCI
+
+        QQ=0.D+00
+        Do i=1,nCI
+           wgt=CIwfn(i+jst)*CIwfn(i+jst)
+           if(abs(wgt)<thresh) cycle
+           Call Vcor_getLabel(i,Label1)
+           Do j=1,Nfree
+              n=Label1(j)
+              Call Vcor_getDwfn(j,nCHO(j),n,D1)
+              Do k=1,nCHO(j)
+                 QQ(j)=QQ(j) + wgt*quad(k,j)*D1(k)
+              End do
+           End do
+        End do
+
+        Do i1=1,nCI
+           Call Vcor_getLabel(i1,Label1)
+        Do i2=1,i1-1
+           Call Vcor_getLabel(i2,Label2)
+           wgt=2.D+00*CIwfn(i1+jst)*CIwfn(i2+jst)
+           if(abs(wgt)<thresh) cycle
+           Do j=1,Nfree
+              Do k=1,j-1
+                 if(Label1(k)/=Label2(k)) goto 1000
+              End do
+              Do k=j+1,Nfree
+                 if(Label1(k)/=Label2(k)) goto 1000
+              End do
+
+              n1=Label1(j)
+              n2=Label2(j)
+              Call Vcor_getXwfn(j,nCHO(j),n1,n2,D1)
+              Do k=1,nCHO(j)
+                 QQ(j)=QQ(j) + wgt*quad(k,j)*D1(k)
+              End do
+
+              1000 Continue
+           End do
+        End do
+        End do
+
+        Call vav_q2x(Nat,Nfree,x0,QQ)
+!MK
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!     
+      R0=0.0;   
+      Do j=1,Nat
+       Do k=j+1,Nat
+        R0(j,k)=sqrt((x0(1,j)-x0(1,k))**2+(x0(2,j)-x0(2,k))**2+(x0(3,j)-x0(3,k))**2)
+        R0(k,j)=R0(j,k)
+       End Do
+      End Do
+!MK
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+ 
+    
+
+        Call spr_GetIO(i,j)
+        Write(j,100) 
+        Write(j,200) QQ
+        Write(j,110) 
+        Write(j,200) x0
+        Write(j,120)!MK
+        Write(j,200) R0!MK
+        Write(j,130)!MK
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!     
+      A0=0.0;   
+      Do i=1,Nat
+       Do j=1,Nat
+         if(i==j)cycle
+        Do k=1,Nat
+         if(j==k .or. i==k .or. k>j)cycle 
+        A0=acos((R0(i,j)**2.d0+R0(i,k)**2.d0-R0(k,j)**2.d0)/(2*R0(i,j)*R0(i,k)))*180.0D0/pi
+        Write(6,300)j,i,k,A0
+        End Do
+       End Do
+      End Do
+!MK
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+
+
+!        
+
+        Call spr_memdealloc(dble(size(QQ)+size(quad)+size(x0))*8)
+        Deallocate(QQ,quad,x0,R0)
+
+     100 Format(/,10x,'o VIBRATIONALLY AVERAGED STRUCTURE',//,10x,'  - Q0 -')
+     110 Format(/,10x,'  - X0 -')
+     120 Format(/,10x,'  - R0 -')
+     130 Format(/,10x,'  - A0 -')
+     200 Format(12x,3f12.6)
+     300 Format(12x,3i2,' ^ ',f9.4)
+
+     End subroutine
+
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!
+!    ist :: an index for the current state
+
+     Subroutine Vci_prpt(ist)
+
+     USE Vci_mod
+     USE Vav_mod
+
+     Implicit None
+
+        Integer :: spr_memalloc
+        Integer :: i,j,k,l,m,n,i1,i2
+
+        Integer :: ist,jst,Lbl1(Nfree),Lbl2(Nfree)
+        Real(8) :: wgt
+        Real(8), dimension(NP) :: P,tmp
+        Real(8), dimension(maxCHO) :: D1
+
+        jst=(ist-1)*nCI
+
+        P=0.D+00
+        Do i=1,nCI
+           wgt=CIwfn(i+jst)*CIwfn(i+jst)
+           Call Vcor_getLabel(i,Lbl1)
+
+           tmp=0.D+00
+           Do j=1,Nfree
+              Call Vcor_getDwfn(j,nCHO(j),Lbl1(j),D1)
+
+              Do k=1,NP
+                 Do l=1,nCHO(j)
+                    !P(k)=P(k) + wgt*P1(l,k,j)*D1(l)
+                    tmp(k)=tmp(k) + P1(l,k,j)*D1(l)
+                 End do
+
+              End do
+           End do
+
+           P=P+tmp*wgt
+
+        End do
+
+        Do i1=1,Nci
+        Do i2=1,i1-1
+           wgt=2.D+00*CIwfn(i1+jst)*CIwfn(i2+jst)
+           Call Vcor_getLabel(i1,Lbl1)
+           Call Vcor_getLabel(i2,Lbl2)
+
+           tmp=0.D+00
+           Do j=1,Nfree
+              Do k=1,j-1
+                 if(Lbl1(k)/=Lbl2(k)) goto 1000
+              End do
+              Do k=j+1,Nfree
+                 if(Lbl1(k)/=Lbl2(k)) goto 1000
+              End do
+
+              Call Vcor_getXwfn(j,nCHO(j),Lbl1(j),Lbl2(j),D1)
+              Do k=1,NP
+                 Do l=1,nCHO(j)
+                    !P(k)=P(k) + wgt*P1(l,k,j)*D1(l)
+                    tmp(k)=tmp(k) + P1(l,k,j)*D1(l)
+                 End do
+
+              End do
+              1000 Continue
+
+           End do
+
+           P=P+tmp*wgt
+
+        End do
+        End do
+
+        if(MR2==1) goto 999
+
+        !=========================
+        !  MR=2,3,.. is not ready
+        !=========================
+
+    999 Continue
+        Call spr_GetIO(i,j)
+        Write(j,100) 
+        Do i=1,NP
+           Write(j,200) i,P0(i),P(i),P0(i)+P(i)
+        End do
+
+    100 Format(/,10x,'o VIBRATIONAL AVERAGE OVER PROPERTY SURFACES',/, &
+                 10x,'     [i]      P0             dP             <P>')
+    200 Format(15x,i2,1x,3f15.6)
+
+     End subroutine
+
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!
+
+      Subroutine Vci_print(io)
+
+      USE Vci_mod
+
+     Implicit None
+
+       Integer :: i,j,k 
+       Integer :: io,spr_memalloc
+
+       Real(8) :: E0,E,realE0
+       Integer, dimension(:), allocatable :: Lbl,Label
+       Real(8), dimension(:), allocatable :: Ci,Wi
+       Real(8), parameter :: H2wvn=2.194746D+05, thsh=1.0D-03
+
+       Logical :: r_v,vav_Getr_v
+       Integer :: NP,vav_GetNP
+
+          r_v=vav_Getr_v()
+          NP=vav_GetNP()
+
+          i=spr_memalloc(1,dble(nCI*2)*8.D+00+dble(nCI)*4.D+00+dble(Nfree)*4.D+00)
+          Allocate(Ci(nCI),Wi(nCI),Lbl(nCI),Label(Nfree))
+
+          ! Print Ground state
+          Ci=CIwfn(1:nCI)
+          Do i=1,nCI
+             Wi(i)=Ci(i)*Ci(i)
+          End do
+          Call sort(nCI,Lbl,Wi)
+
+          E0=CIene(1)*H2wvn
+          Call Vcor_getLabel(Lbl(1),Label)
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!MK
+           if (sum(label)==0)then
+             write(666,666)MR,nci,maxsum,nCUP,nGen,nLvl,maxexc          
+             write(666,'(f10.3)',advance='no')E0
+ 666 Format(/,"VCI(cm^-1)  for MR=",i1," nci=",i5," maxsum=",i2," nCUP=",i1," nGEN=", i2," nLvl=",i1," maxexc=",10i3)
+             RealE0=E0
+           endif
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!MK              
+          if(Nfree<31) then
+             write(io,100) 0,Label
+             write(io,110) E0
+             write(io,120)
+             i=1
+             Do while(Wi(i) > thsh) 
+                Call Vcor_getLabel(Lbl(i),Label)
+                write(io,125) Ci(Lbl(i)),Wi(i),Label
+                i=i+1
+             End do
+
+          else
+             write(io,100) 0,Label(1:30)
+             write(io,101) 0,Label(31:)
+             write(io,110) E0
+
+             write(io,120)
+             i=1
+             Do while(Wi(i) > thsh) 
+                Call Vcor_getLabel(Lbl(i),Label)
+                write(io,125) Ci(Lbl(i)),Wi(i),Label(1:30)
+                write(io,126) Label(31:)
+                i=i+1
+             End do
+          endif
+
+          if(r_v) Call Vci_ave(1)
+          if(NP>0) Call Vci_prpt(1)
+
+          ! Print Excited state
+          Do i=2,Nst
+             Ci=CIwfn(nCI*(i-1)+1:nCI*i)
+             Do j=1,nCI
+                Wi(j)=Ci(j)*Ci(j)
+             End do
+             Call sort(nCI,Lbl,Wi)
+
+             E=CIene(i)*H2wvn
+             Call Vcor_getLabel(Lbl(1),Label)
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!MK
+           if (sum(label)==0)then
+             write(666,666)MR,nci,maxsum,nCUP,nGen,nLvl,maxexc          
+             write(666,*)"(Ghost ground state warning!)"             
+             write(666,'(f10.3)',advance='no')E
+             realE0=E
+           endif
+           if (sum(label)==1)then
+           write(666,'(f10.3)',advance='no')E-realE0
+             
+             if(E0/=realE0)write(777,'(f10.3)',advance='no')E-E0
+           endif
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!
+             if(Nfree<31) then
+                write(io,100) i-1,Label
+                write(io,115) E,E-E0
+                write(io,120)
+                j=1
+                Do while(Wi(j) > thsh) 
+                   Call Vcor_getLabel(Lbl(j),Label)
+                   write(io,125) Ci(Lbl(j)),Wi(j),Label
+                   j=j+1
+                End do
+             else
+                write(io,100) i-1,Label(1:30)
+                write(io,101) i-1,Label(31:)
+                write(io,115) E,E-E0
+                write(io,120)
+                j=1
+                Do while(Wi(j) > thsh) 
+                   Call Vcor_getLabel(Lbl(j),Label)
+                   write(io,125) Ci(Lbl(j)),Wi(j),Label(1:30)
+                   write(io,126) Label(31:)
+                   j=j+1
+                End do
+             endif
+          if(r_v) Call Vci_ave(i)
+          if(NP>0) Call Vci_prpt(i)
+
+          End do
+
+          Call spr_memdealloc(dble(size(Ci)+size(Wi))*8.D+00+dble(size(Lbl))*4.D+00)
+          Call spr_memdealloc(dble(size(Label))*4.D+00)
+          Deallocate(Ci,Wi,Lbl,Label)
+
+      100 Format(/,9x,'> STATE ',i3.3,': ',6(5i2,1x))!MK i1>i2
+      101 Format(17x,': ',6(5i1,1x))
+      110 Format(/,10x,'   E(VCI)   =',f12.2)
+      115 Format(/,10x,'   E(VCI)   =',f12.2,/ &
+                 10x,'   E(VCI)-E0=',f12.2)
+      120 Format(/,10x,'   COEFF.  WEIGHT      CONFIG.') 
+      125 Format(13x,f6.3,2x,f6.3,6x,6(5i2,1x))!MK i1>i2
+      126 Format(33x,6(5i2,1x))!MK i1>i2
+
+     End subroutine
+
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+!
+
+      Subroutine Vci_print2(io)
+
+      USE Vci_mod
+
+      Implicit None
+
+         Integer :: i,j,k,kk
+         Integer :: io,spr_memalloc
+
+         Real(8) :: E0,E,cc
+         Integer, dimension(:), allocatable :: Lbl,Label
+         Real(8), dimension(:), allocatable :: Ci,Wi
+         Real(8), parameter :: H2wvn=2.194746D+05, thsh=1.0D-03
+
+         Logical :: r_v,vav_Getr_v
+         Integer :: NP,vav_GetNP
+
+         Save :: E0
+
+         r_v=vav_Getr_v()
+         NP=vav_GetNP()
+
+         i=spr_memalloc(-1,dble(nCI*2)*8.D+00+dble(nCI)*4.D+00+dble(Nfree)*4.D+00)
+         Allocate(Ci(nCI),Wi(nCI),Lbl(nCI),Label(Nfree))
+
+         !dbg Do i=1,nCI
+         !dbg    write(6,'(i3,10f8.3)') i,CIwfn((i-1)*nCI+1:(i-1)*nCI+10)
+         !dbg End do
+
+         ! Print Reference state
+         j=1; kk=1; cc=0.D+00
+         Do i=1,nCI
+            if(cc<abs(CIwfn(j))) then 
+               kk=i
+               cc=abs(CIwfn(j))
+            endif
+            j=j+nCI
+         End do
+         !dbg write(6,*) kk
+         Ci=CIwfn((kk-1)*nCI+1:kk*nCI)
+         Do i=1,nCI
+            Wi(i)=Ci(i)*Ci(i)
+         End do
+         Call sort(nCI,Lbl,Wi)
+
+         Call Vcor_getLabel(Lbl(1),Label)
+         if(Nfree<31) then
+            write(io,100) Label
+         else
+            write(io,100) Label(1:30)
+            write(io,102) Label(31:)
+         endif
+         if(.not. zp) then
+            E=CIene(kk)*H2wvn
+            write(io,115) E,E-E0
+         else
+            E0=CIene(kk)*H2wvn
+            write(io,110) E0
+         endif
+         write(io,120)
+         i=1
+         Do while(Wi(i) > thsh) 
+            Call Vcor_getLabel(Lbl(i),Label)
+            if(Nfree<31) then 
+               write(io,125) Ci(Lbl(i)),Wi(i),Label
+            else
+               write(io,125) Ci(Lbl(i)),Wi(i),Label(1:30)
+               write(io,126) Label(31:)
+            endif
+            i=i+1
+         End do
+         if(r_v) Call Vci_ave(kk)
+         if(NP>0) Call Vci_prpt(kk)
+
+         if(npCnf==0) return
+
+         ! Print P-states
+         write(io,101)
+         Do i=1,npCnf
+            k=1+i; kk=1; cc=0.D+00
+            Do j=1,nCI
+               if(cc<abs(CIwfn(k))) then 
+                  kk=j
+                  cc=abs(CIwfn(k))
+               endif
+               k=k+nCI
+            End do
+            !dbg write(6,*) kk
+            Ci=CIwfn(nCI*(kk-1)+1:nCI*kk)
+            Do j=1,nCI
+               Wi(j)=Ci(j)*Ci(j)
+            End do
+            Call sort(nCI,Lbl,Wi)
+
+            Call Vcor_getLabel(Lbl(1),Label)
+            E=CIene(kk)*H2wvn
+            if(Nfree<31) then
+               write(io,103) i,Label
+               write(io,115) E,E-E0
+            else
+               write(io,103) i,Label(1:30)
+               write(io,102) Label(31:)
+               write(io,115) E,E-E0
+            endif
+           
+            write(io,120)
+            j=1
+            Do while(Wi(j) > thsh)
+               Call Vcor_getLabel(Lbl(j),Label)
+               if(Nfree<31) then
+                  write(io,125) Ci(Lbl(j)),Wi(j),Label
+               else
+                  write(io,125) Ci(Lbl(j)),Wi(j),Label(1:30)
+                  write(io,126) Label(31:)
+               endif
+               j=j+1
+            End do
+            if(r_v) Call Vci_ave(i)
+            if(NP>0) Call Vci_prpt(i)
+
+         End do
+
+         Call spr_memdealloc(dble(size(Ci)+size(Wi))*8.D+00+dble(size(Lbl))*4.D+00)
+         Call spr_memdealloc(dble(size(Label))*4.D+00)
+         Deallocate(Ci,Wi,Lbl,Label)
+
+     100 Format(/,9x,'o REFERENCE STATE : ',6(5i2,1x))!MK i1>i2
+     101 Format(/,9x,'*****  RESONANT  STATE  *****')
+     102 Format(27x,': ',6(5i1,1x))
+     103 Format(/,9x,'ooo STATE ',i2.2,8x,' : ',6(5i2,1x))!MK i1>i2
+     110 Format(/,10x,'   E(VCI)   =',f12.2)
+     115 Format(/,10x,'   E(VCI)   =',f12.2,/ &
+                  10x,'   E(VCI)-E0=',f12.2)
+     120 Format(/,10x,'   COEFF.  WEIGHT      CONFIG.') 
+     125 Format(13x,f6.3,2x,f6.3,6x,6(5i2,1x))!MK i1>i2
+     126 Format(33x,6(5i2,1x))!MK i1>i2
+
+     End subroutine
+
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80
+
+      Subroutine Vci_Dump()
+
+      USE Vci_mod
+
+      Implicit None
+
+        Integer :: wwf,i,j
+        Integer, dimension(:,:), allocatable :: Label
+        Real(8), dimension(:,:), allocatable :: C1wfn,E1wfn
+        Character :: wftyp*4
+
+          ! ------------------------------------------------------------
+          ! Dump VCI wavefunction
+          Call file_indicator(30,wwf)
+          Open(wwf,file='vci-w.wfn',status='unknown',form='UNFORMATTED')
+          Write(wwf) Nfree
+          Write(wwf) nCHO         ! nCHO(Nfree)
+          Write(wwf) omegaf       ! omegaf(Nfree)
+
+          if(lvscf) then
+             Allocate(C1wfn(maxCHO*maxCHO,Nfree),E1wfn(maxCHO,Nfree))
+             C1wfn=0; E1wfn=0
+             Do i=1,Nfree
+                Call Modal_getCwfn(i,C1wfn(:,i))
+                Call Modal_getEne(i,E1wfn(:,i))
+             End do
+             Write(wwf) C1wfn     ! C1wfn(int*int,Nfree)
+             Write(wwf) E1wfn     ! E1wfn(int,Nfree)
+             Deallocate(C1wfn,E1wfn)
+          endif
+
+          Allocate(Label(Nfree,Nci))
+          Do i=1,Nci
+             Call Vcor_getLabel(i,Label(:,i))
+          End do
+
+          wftyp='VCI'
+          Write(wwf) wftyp
+          Write(wwf) Nstate,Nci
+          Write(wwf) Label        ! Label(Nfree,Nci)
+          Write(wwf) CIwfn        ! CIwfn(Nci*Nstate)
+          Write(wwf) CIene        ! CIene(Nci)
+          Close(wwf)
+
+          !Open(wwf,file='vci-w.wfn',status='unknown',form='FORMATTED')
+          !Write(wwf,'(i4)') Nfree
+          !Write(wwf,'(3i4)') nho
+          !Write(wwf,'(3f8.2)') omegaf
+          !Do i=1,Nfree
+          !    Write(6,'(11f8.4)') C1wfn(:,i)
+          !    Write(6,*)
+          !End do
+          !Write(wwf,'(2i4)') Nstate,Nci
+          !Write(wwf,'(3i4)') Label
+          !Do i=1,Nstate
+          !   Write(wwf,'(10f12.6)') CIwfn(Nci*(i-1)+1:Nci*i)
+          !   Write(wwf,*)
+          !End do
+
+          Deallocate(Label)
+
+      End Subroutine
+
+!---+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----80

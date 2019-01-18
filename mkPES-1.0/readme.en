@@ -1,0 +1,59 @@
+
+   Author:  Kiyoshi Yagi
+            Department of Applied Chemistry
+            School of Engineering
+            The University of Tokyo
+   E-mail:  yagi@qcl.t.u-tokyo.ac.jp
+
+--------------------------------------------------------------------------------
+
+1. Input options
+
+&mode  ... Read normal modes from Hessian output
+      Nat:  int  : # of atoms
+    Nfree:  int  : # of modes (default=3*Nat-6)
+      typ:  ch   : Type of Ab initio program ({GAU|ACE|NWC})
+     path:  ch   : Name of the output file
+      Sym:  ch   : Symmetry
+                     C1,Ci,Cs,D2,C2v,C2h,D2h
+  ModeSym:  int(): Irrep.  
+                     C1: A=0
+                     Ci: Ag=0,Au=1
+                     Cs: A'=0,A"=1
+                     C2: A =0, B=1
+                     D2: A1=0,B1=1,B2=2,B3=3
+                    C2v: A1=0,A2=1,B1=2,B2=3
+                    C2h: Ag=0,Au=1,Bg=2,Bu=3
+                    D2h: Ag=0,Au=1,B1g=2,B1u=3,
+                         B2g=4,B2u=5,B3u=6,B3g=7
+
+&airun ... Control of ab initio run
+   Runtyp:  ch   : Type of ab initio RUN (default=typ)
+   Method:  ch   : Method {HF|B3LYP|MP2|CCSD|CCSD(T)|..}
+      Com: ch(10): Command to pass to the ab initio program
+      dpl:  log  : If true, read dipole moment (only for RunTyp='G98')
+    nmrcc:  log  : If true, read NMR coupling constant (only for RunTyp='ACES')
+
+&mkhs  ... Control of QFF generator
+     Qref:  dbl(): Position of the reference point 
+     delx:  dbl  : Stepsize (default=0.5)
+       MR:  int  : Mode representation 
+     base:  int  : =0, Energy based method (numerical 4th-order differenciation)
+                   =1, Hessian based method (numerical 2nd-order differenciation)
+    - only for base=0
+        mode:  int(): Active modes
+       fmode:  int(): Inactive modes
+    - only for base=1 
+       *NOTE* With m1 and m2, the program does only Ab initio calculations, and ends 
+              without generating out.hs 
+          m1:  int  : The mode to start ab initio calculation
+          m2:  int  : The mode to end ab initio calculation
+
+&mkSx  ... Control of Spline function generator
+      mr1:  int(): MR1 modes
+      mr2:  int(): MR2 modes
+      mr3:  int(): MR3 modes
+     vmax:  int  : # of grid points
+    title:  char : Title of spline function
+
+--------------------------------------------------------------------------------

@@ -1,0 +1,33 @@
+ SINDO_ROOT = /scr/haku_2/keceli/mysindo2
+ TARGET = STAT
+
+ SINDO_BINDIR = $(SINDO_ROOT)/bin/$(TARGET)
+ SINDO_LIBDIR = $(SINDO_ROOT)/lib/$(TARGET)
+
+ F77C = /scr/haku_2/shiozaki/intel/fce/10.1.015/bin/ifort
+ #F77OPT= -w -cm -mp1 -O2 -prefetch  -unroll
+ F77OPT= -mp1 -O3 -parallel -vec-report0 -static
+ F77NOOPT= -w -cm -mp1 -O
+
+ F90C = /scr/haku_2/shiozaki/intel/fce/10.1.015/bin/ifort
+ #F90OPT= -w -cm -mp1 -O2 -prefetch  -unroll #-mp1 -O3 -tpp7 -prefetch  -unroll
+ F90OPT= -static -vec-report0
+ F90NOOPT= -w -cm -mp1 -O
+
+ LINKER = ifort 
+ LINKFLAG = -vec-report0 -static
+ #LIBS = -L/scr/haku_2/shiozaki/intel/mkl/10.0.1.014/lib/em64t/ -lmkl -lmkl_em64t -lmkl_lapack -lguide -lpthread -lvib -lmisc -lspr -Vaxlib
+ LIBS = -lvib -lmisc -llapack -lblas -lspr -Vaxlib
+
+ AR = ar
+ ARFLAG = cr
+
+ MOD = .mod
+
+ RM = rm -f
+
+.f90.o:
+	$(F90C) $(F90OPT) -c $< -o $@
+ 
+.SUFFIXES: .f90 .o
+
